@@ -560,11 +560,11 @@ if __name__ == '__main__':
         t.join()
 
     email_msg = """From: {mail_from}
-    To: {mail_to}
-    Subject: New movies in Pathe
-    Content-type: text/plain; charset=utf-8
+To: {mail_to}
+Subject: New movies in Pathe
+Content-type: text/plain; charset=utf-8
 
-    """.format(mail_from=mail_from, mail_to=mail_to)
+""".format(mail_from=mail_from, mail_to=mail_to)
 
     for movie_url, imdb_url in result_list:
         email_msg += '{0} {1}\r\n'.format(movie_url, imdb_url)
