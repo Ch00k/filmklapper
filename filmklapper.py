@@ -1,6 +1,6 @@
+import argparse
 import configparser
 import datetime
-import os
 import queue
 import re
 import smtplib
@@ -505,72 +505,70 @@ def process_movie():
         movies_queue.task_done()
 
 
-movies = requests.get('http://www.pathe.nl/films')
-lh_doc = lh.fromstring(movies.text)
-pages = lh_doc.xpath('//div[@id="pagination"]/a/text()')
-num_pages = pages[-2]
+if __name__ == '__main__':
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('-c', '--config', required=True, help="Config file")
+    args = arg_parser.parse_args()
 
+    config = configparser.ConfigParser()
+    config.read(args.config)
+    mail_from = config.get('mail', 'from')
+    mail_to = config.get('mail', 'to')
+    smtp_host = config.get('mail', 'host')
+    smtp_username = config.get('mail', 'username')
+    smtp_password = config.get('mail', 'password')
 
-num_page_threads = 10
-num_movie_threads = 18
-page_threads = []
-movie_threads = []
+    movies = requests.get('http://www.pathe.nl/films')
+    lh_doc = lh.fromstring(movies.text)
+    pages = lh_doc.xpath('//div[@id="pagination"]/a/text()')
+    num_pages = pages[-2]
 
-result_list = []
+    num_page_threads = 10
+    num_movie_threads = 18
+    page_threads = []
+    movie_threads = []
 
+    result_list = []
 
-pages_queue = queue.Queue()
-movies_queue = queue.Queue()
+    pages_queue = queue.Queue()
+    movies_queue = queue.Queue()
 
-for _ in range(num_page_threads):
-    page_thread = threading.Thread(target=process_movies_list_page)
-    page_thread.start()
-    page_threads.append(page_thread)
+    for _ in range(num_page_threads):
+        page_thread = threading.Thread(target=process_movies_list_page)
+        page_thread.start()
+        page_threads.append(page_thread)
 
+    for _ in range(num_movie_threads):
+        movie_thread = threading.Thread(target=process_movie)
+        movie_thread.start()
+        movie_threads.append(movie_thread)
 
-for _ in range(num_movie_threads):
-    movie_thread = threading.Thread(target=process_movie)
-    movie_thread.start()
-    movie_threads.append(movie_thread)
+    for page_num in range(1, int(num_pages) + 1):
+        movies_url = 'http://www.pathe.nl/films?page={0}'.format(page_num)
+        pages_queue.put(movies_url)
 
+    pages_queue.join()
+    for _ in range(num_page_threads):
+        pages_queue.put(None)
+    for t in page_threads:
+        t.join()
 
-for page_num in range(1, int(num_pages) + 1):
-    movies_url = 'http://www.pathe.nl/films?page={0}'.format(page_num)
-    pages_queue.put(movies_url)
+    movies_queue.join()
+    for _ in range(num_movie_threads):
+        movies_queue.put(None)
+    for t in movie_threads:
+        t.join()
 
+    email_msg = """From: {mail_from}
+    To: {mail_to}
+    Subject: New movies in Pathe
+    Content-type: text/plain; charset=utf-8
 
-pages_queue.join()
-for _ in range(num_page_threads):
-    pages_queue.put(None)
-for t in page_threads:
-    t.join()
+    """.format(mail_from=mail_from, mail_to=mail_to)
 
-movies_queue.join()
-for _ in range(num_movie_threads):
-    movies_queue.put(None)
-for t in movie_threads:
-    t.join()
+    for movie_url, imdb_url in result_list:
+        email_msg += '{0} {1}\r\n'.format(movie_url, imdb_url)
 
-
-config = configparser.ConfigParser()
-config.read(os.path.expanduser('~/.filmklapper.conf'))
-mail_from = config.get('mail', 'from')
-mail_to = config.get('mail', 'to')
-smtp_host = config.get('mail', 'host')
-smtp_username = config.get('mail', 'username')
-smtp_password = config.get('mail', 'password')
-
-
-email_msg = """From: {mail_from}
-To: {mail_to}
-Subject: New movies in Pathe
-Content-type: text/plain; charset=utf-8
-
-""".format(mail_from=mail_from, mail_to=mail_to)
-
-for movie_url, imdb_url in result_list:
-    email_msg += '{0} {1}\r\n'.format(movie_url, imdb_url)
-
-smtp_conn = smtplib.SMTP_SSL(smtp_host)
-smtp_conn.login(smtp_username, smtp_password)
-smtp_conn.sendmail(mail_from, mail_to, email_msg)
+    smtp_conn = smtplib.SMTP_SSL(smtp_host)
+    smtp_conn.login(smtp_username, smtp_password)
+    smtp_conn.sendmail(mail_from, mail_to, email_msg)
