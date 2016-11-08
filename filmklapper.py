@@ -28,6 +28,42 @@ TODAY = datetime.date.today()
 TOMORROW = TODAY + datetime.timedelta(days=1)
 
 
+MOVIES_PAGE_URL = 'http://www.pathe.nl/films'
+MOVIES_LINKS = (
+    '//section[contains(@class, "poster-carousel") '
+    'and position() >= 1 and position() <= 2]/div/a/@href'
+)
+MOVIE_TITLE = 'string(//h1[@itemprop="name"])'
+MOVIE_TITLE_ALT = 'string(//div[@class="page-title "]/div[@class="page-cell"]/h1)'
+MOVIE_SPECIAL = 'string(//div[@class="moviedetail-side"]/ul/li/span[text() = "Special:"]/..)'
+MOVIE_RELEASE_DATE = 'string(//span[@class="release-date"]/em)'
+MOVIE_GENRES = 'string(//div[@class="moviedetail-side"]/ul/li/span[text()="Genre:"]/..)'
+MOVIE_DURATION = 'string(//div[@class="moviedetail-side"]/ul/li/span[text() = "Duur:"]/..)'
+MOVIE_LANGUAGE = 'string(//div[@class="moviedetail-side"]/ul/li/span[text()="Taalversie:"]/..)'
+MOVIE_RESTRICTIONS = (
+    '//div[@class="moviedetail-side"]/ul/li/span[text()="Kijkwijzer:"]/../a/img/@src'
+)
+MOVIE_TECHNOLOGIES = 'string(//div[@class="moviedetail-side"]/ul/li/span[text()="Te zien in:"]/..)'
+MOVIE_RATING = 'string(//div[@itemprop="aggregateRating"]/span/span)'
+MOVIE_CAST = '//div[@class="slider-entry"]'
+MOVIE_PERSON = 'span/text()'
+MOVIE_DIRECTOR = 'div[@class="slider-photo"]/em[text()="Regisseur"]'
+MOVIE_CINEMAS = (
+    '//section[@id="ScheduleContainer"]/section[@id="MovieScheduleDetails"]'
+    '/section/div/div/table/@id'
+)
+
+SHOWTIME_DAYS = '//table[@id="Schedule_{0}"]/tr'
+SHOWTIME_DAY = 'th/text()'
+SHOWTIMES = 'td/a'
+SHOWTIME_URL = 'string(@href)'
+SHOWTIME_ITEMS = 'span/text()'
+
+IMDB_RESULTS = '//div[@class="findSection"]/h3[@class="findSectionHeader" and text()="Titles"]'
+IMDB_LINK = 'string(../table/tr[@class="findResult odd"][1]/td[@class="result_text"]/a/@href)'
+IMDB_RATING = '//span[@itemprop="ratingValue"]/text()'
+
+
 class IMDBMovieNotFoundError(Exception):
     pass
 
@@ -73,9 +109,7 @@ def get_movie_special(movie_page_doc):
     :return: movie special status if it exists, None otherwise
     :rtype: str
     """
-    special_string = movie_page_doc.xpath(
-        'string(//div[@class="moviedetail-side"]/ul/li/span[text() = "Special:"]/..)'
-    )
+    special_string = movie_page_doc.xpath(MOVIE_SPECIAL)
     if special_string:
         special_string = ''.join(special_string.split())
         special = special_string.split(':')[1]
@@ -94,10 +128,7 @@ def get_movie_title(movie_page_doc):
     :return: movie title
     :rtype: str
     """
-    title = (
-        movie_page_doc.xpath('string(//h1[@itemprop="name"])') or
-        movie_page_doc.xpath('string(//div[@class="page-title "]/div[@class="page-cell"]/h1)')
-    )
+    title = movie_page_doc.xpath(MOVIE_TITLE) or movie_page_doc.xpath(MOVIE_TITLE_ALT)
     title_match = re.match('^(.*)\s(\(.*\))$', title)
     if title_match:
         title = title_match.group(1)
@@ -111,7 +142,7 @@ def get_movie_release_date(movie_page_doc):
     :return: movie release date
     :rtype: datetime.date
     """
-    date_string = movie_page_doc.xpath('string(//span[@class="release-date"]/em)')
+    date_string = movie_page_doc.xpath(MOVIE_RELEASE_DATE)
     date_string_match = re.match('^(\d{1,2})\s([a-z]+)\s(\d{4})', date_string)
     groups = date_string_match.groups()
     day = groups[0]
@@ -128,9 +159,7 @@ def get_movie_genres(movie_page_doc):
     :return: movie genres if found, None otherwise
     :rtype: list
     """
-    genres_string = movie_page_doc.xpath(
-        'string(//div[@class="moviedetail-side"]/ul/li/span[text()="Genre:"]/..)'
-    )
+    genres_string = movie_page_doc.xpath(MOVIE_GENRES)
     if genres_string:
         genres_string = ''.join(genres_string.split())
         genres = genres_string.split(':')[1].split(',')
@@ -145,9 +174,7 @@ def get_movie_duration(movie_page_doc):
     :return: movie duration if found, None otherwise
     :rtype: int
     """
-    duration_string = movie_page_doc.xpath(
-        'string(//div[@class="moviedetail-side"]/ul/li/span[text() = "Duur:"]/..)'
-    )
+    duration_string = movie_page_doc.xpath(MOVIE_DURATION)
     duration_string = duration_string.strip()
     duration_string_match = re.match('^Duur:\s+(\d+)\s+minuten$', duration_string)
     if duration_string_match:
@@ -162,9 +189,7 @@ def get_movie_language(movie_page_doc):
     :return: movie language if found, None otherwise
     :rtype: str
     """
-    language_string = movie_page_doc.xpath(
-        'string(//div[@class="moviedetail-side"]/ul/li/span[text()="Taalversie:"]/..)'
-    )
+    language_string = movie_page_doc.xpath(MOVIE_LANGUAGE)
     if language_string:
         language_dutch = language_string.strip().split(': ')[1]
         language = nl_to_en(language_dutch)
@@ -180,9 +205,7 @@ def get_movie_restrictions(movie_page_doc):
     :raise: :class:~.`PatheMovieParseError` if restrictions string retrieved from the DOM model could
         not be parsed
     """
-    restrictions_list = movie_page_doc.xpath(
-        '//div[@class="moviedetail-side"]/ul/li/span[text()="Kijkwijzer:"]/../a/img/@src'
-    )
+    restrictions_list = movie_page_doc.xpath(MOVIE_RESTRICTIONS)
     restrictions = []
     for restriction in restrictions_list:
         restriction_match = re.match('^/themes/main/gfx/icons/kijkwijzer/(.*).png$', restriction)
@@ -209,9 +232,7 @@ def get_movie_technologies(movie_page_doc):
     :return: movie technologies if found, None otherwise
     :rtype: list
     """
-    technologies_string = movie_page_doc.xpath(
-        'string(//div[@class="moviedetail-side"]/ul/li/span[text()="Te zien in:"]/..)'
-    )
+    technologies_string = movie_page_doc.xpath(MOVIE_TECHNOLOGIES)
     if technologies_string:
         technologies_string = ''.join(technologies_string.split())
         technologies = technologies_string.split(':')[1].split(',')
@@ -225,7 +246,7 @@ def get_movie_rating(movie_page_doc):
     :return: movie rating if found, None otherwise
     :rtype: int
     """
-    rating_string = movie_page_doc.xpath('string(//div[@itemprop="aggregateRating"]/span/span)')
+    rating_string = movie_page_doc.xpath(MOVIE_RATING)
     if rating_string:
         rating_string = rating_string.replace(',', '.')
         return float(rating_string)
@@ -238,12 +259,12 @@ def get_movie_directors_cast(movie_page_doc):
     :return: a tuple containing two lists - movie directors and movie cast
     :rtype: tuple
     """
-    directors_cast_items = movie_page_doc.xpath('//div[@class="slider-entry"]')
+    directors_cast_items = movie_page_doc.xpath(MOVIE_CAST)
     directors = []
     cast = []
     for person in directors_cast_items:
-        person_name = person.xpath('span/text()')[0]
-        if person.xpath('div[@class="slider-photo"]/em[text()="Regisseur"]'):
+        person_name = person.xpath(MOVIE_PERSON)[0]
+        if person.xpath(MOVIE_DIRECTOR):
             directors.append(person_name)
         else:
             cast.append(person_name)
@@ -323,10 +344,7 @@ def datetime_to_utc(dt):
 
 
 def get_movie_cinemas(movie_page_doc):
-    movie_cinemas = movie_page_doc.xpath(
-        '//section[@id="ScheduleContainer"]/section[@id="MovieScheduleDetails"]'
-        '/section/div/div/table/@id'
-    )
+    movie_cinemas = movie_page_doc.xpath(MOVIE_CINEMAS)
     return [cinema.split('_')[1] for cinema in movie_cinemas]
 
 
@@ -342,9 +360,9 @@ def get_movie_showtimes_for_cinema(movie_page_doc, cinema):
     :rtype: list
     """
     cinema_movie_showtimes = []
-    showtime_days = movie_page_doc.xpath('//table[@id="Schedule_{0}"]/tr'.format(cinema))
+    showtime_days = movie_page_doc.xpath(SHOWTIME_DAYS.format(cinema))
     for showtime_day in showtime_days:
-        day_name = showtime_day.xpath('th/text()')
+        day_name = showtime_day.xpath(SHOWTIME_DAY)
 
         # Skip elements that are not day names (i.e. that contain only whitespace)
         if len(day_name) > 1:
@@ -353,9 +371,9 @@ def get_movie_showtimes_for_cinema(movie_page_doc, cinema):
         day_name = day_name[0]
         showtime_date = normalize_date(day_name)
 
-        showtimes = showtime_day.xpath('td/a')
+        showtimes = showtime_day.xpath(SHOWTIMES)
         for showtime in showtimes:
-            showtime_url = showtime.xpath('string(@href)')
+            showtime_url = showtime.xpath(SHOWTIME_URL)
             # We don't need the showtime that has already been sold out
             if showtime_url == '#modal-soldout':
                 continue
@@ -369,7 +387,7 @@ def get_movie_showtimes_for_cinema(movie_page_doc, cinema):
                 showtime_id = re.match('^/tickets/start/(\d+)$', showtime_url).group(1)
             showtime_id = int(showtime_id)
 
-            showtime_items = showtime.xpath('span/text()')
+            showtime_items = showtime.xpath(SHOWTIME_ITEMS)
             showtime_items = [''.join(showtime_item.split()) for showtime_item in showtime_items]
 
             # Pathe does not explicitly indicate 2D technology so append it
@@ -408,16 +426,12 @@ def get_imdb_id_by_title(title):
         params={'q': title, 's': 'tt', 'ttype': 'ft'}
     )
     lh_doc = lh.fromstring(search_results)
-    results = lh_doc.xpath(
-        '//div[@class="findSection"]/h3[@class="findSectionHeader" and text()="Titles"]'
-    )
+    results = lh_doc.xpath(IMDB_RESULTS)
     if not results:
         raise IMDBMovieNotFoundError("Movie not found on IMDB")
 
     movie = results[0]
-    movie_link = movie.xpath(
-        'string(../table/tr[@class="findResult odd"][1]/td[@class="result_text"]/a/@href)'
-    )
+    movie_link = movie.xpath(IMDB_LINK)
     imdb_id = re.match('^/title/tt(\d+)/\?ref_=fn_ft_tt_1$', movie_link).group(1)
     imdb_id = int(imdb_id)
     return imdb_id
@@ -444,35 +458,19 @@ def get_movie_imdb_rating(**kwargs):
     movie_page = do_imdb_request(path='title/tt{}'.format(imdb_id))
     lh_doc = lh.fromstring(movie_page)
 
-    imdb_rating = lh_doc.xpath('//span[@itemprop="ratingValue"]/text()')
+    imdb_rating = lh_doc.xpath(IMDB_RATING)
     imdb_rating = float(imdb_rating[0].strip()) if imdb_rating else None
 
-    return imdb_id, imdb_rating
+    return imdb_rating
 
 
 def process_movies_list_page():
-    while True:
-        url = pages_queue.get()
-        if not url:
-            break
-        movies_list_page = requests.get(url)
-        lh_movies_doc = lh.fromstring(movies_list_page.text)
-        movies_list = lh_movies_doc.xpath(
-            '//section[@id="movies-overview"]/div[contains(@class, "poster")]'
-        )
-        for movie in movies_list:
-            if movie.xpath(
-                'div/a[@class="btn btn-type-01 is-small overlay-btn"]/span/text()'
-            )[0] not in ('Tijden en tickets', 'Verwacht'):
-                continue
-
-            movie_url = movie.xpath('div/a[@class="overview-overlay"]/@href')[0]
-            if movie_url == '/film/845/sneak-preview':
-                continue
-
-            movie_url = 'http://www.pathe.nl' + movie_url
-            movies_queue.put(movie_url)
-        pages_queue.task_done()
+    movies_page = requests.get('https://www.pathe.nl/films')
+    lh_movies_doc = lh.fromstring(movies_page.text)
+    movies_urls = lh_movies_doc.xpath(MOVIES_LINKS)
+    for movie in movies_urls:
+        movie_url = 'http://www.pathe.nl' + movie
+        movies_queue.put(movie_url)
 
 
 def process_movie():
@@ -495,12 +493,12 @@ def process_movie():
         title = get_movie_title(lh_movie_doc)
 
         try:
-            imdb_id, imdb_rating = get_movie_imdb_rating(title=title)
+            imdb_rating = get_movie_imdb_rating(title=title)
         except IMDBMovieNotFoundError:
-            imdb_id, imdb_rating = None, None
+            imdb_rating = None
         if imdb_rating and imdb_rating > 8:
-            print(url, 'http://imdb.com/title/tt{0}'.format(imdb_id))
-            result_list.append((url, 'http://imdb.com/title/tt{0}'.format(imdb_id)))
+            print(imdb_rating, url)
+            result_list.append((imdb_rating, url))
 
         movies_queue.task_done()
 
@@ -518,40 +516,21 @@ if __name__ == '__main__':
     smtp_username = config.get('mail', 'username')
     smtp_password = config.get('mail', 'password')
 
-    movies = requests.get('http://www.pathe.nl/films')
+    movies = requests.get(MOVIES_PAGE_URL)
     lh_doc = lh.fromstring(movies.text)
-    pages = lh_doc.xpath('//div[@id="pagination"]/a/text()')
-    num_pages = pages[-2]
 
-    num_page_threads = 10
     num_movie_threads = 18
-    page_threads = []
     movie_threads = []
 
     result_list = []
 
-    pages_queue = queue.Queue()
     movies_queue = queue.Queue()
 
-    for _ in range(num_page_threads):
-        page_thread = threading.Thread(target=process_movies_list_page)
-        page_thread.start()
-        page_threads.append(page_thread)
-
+    process_movies_list_page()
     for _ in range(num_movie_threads):
         movie_thread = threading.Thread(target=process_movie)
         movie_thread.start()
         movie_threads.append(movie_thread)
-
-    for page_num in range(1, int(num_pages) + 1):
-        movies_url = 'http://www.pathe.nl/films?page={0}'.format(page_num)
-        pages_queue.put(movies_url)
-
-    pages_queue.join()
-    for _ in range(num_page_threads):
-        pages_queue.put(None)
-    for t in page_threads:
-        t.join()
 
     movies_queue.join()
     for _ in range(num_movie_threads):
@@ -566,8 +545,8 @@ Content-type: text/plain; charset=utf-8
 
 """.format(mail_from=mail_from, mail_to=mail_to)
 
-    for movie_url, imdb_url in result_list:
-        email_msg += '{0} {1}\r\n'.format(movie_url, imdb_url)
+    for imdb_rating, movie_url in result_list:
+        email_msg += '{0} {1}\r\n'.format(imdb_rating, movie_url)
 
     smtp_conn = smtplib.SMTP_SSL(smtp_host)
     smtp_conn.login(smtp_username, smtp_password)
